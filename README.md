@@ -1,9 +1,10 @@
 # WeesyOS in Rust
 
+![68747470733a2f2f692e696d6775722e636f6d2f38356a677446622e676966](https://github.com/user-attachments/assets/008e8df1-441e-4482-a0e3-eae8d79bb803)
+
 WeensyOS is a tiny kernel that can run on bare-metal x86-64 machines (QEMU's emulated CPUs). The initial state of the kernel contains code for bootstrapping kernel, handling exceptions/syscalls, executing user-level program, and helper functions for the System Programing and Computer Organization [CPSC323] exercises. The implementation includes features for displaying and animating physical and virtual memory layouts based on 4KiB categorized pages for educational purposes.
 
 > [!TIP]
 > This project comprises two branches: one for `rust-safe` (semisafe) code, serving as an example of a potentially correct OS implementation in Rust that aims to minimize the use of unsafe code, and another for `unsafe` code closely following C conventions, essential for its similarity to the WeensyOS pset.
 
-![68747470733a2f2f692e696d6775722e636f6d2f38356a677446622e676966](https://github.com/user-attachments/assets/008e8df1-441e-4482-a0e3-eae8d79bb803)
 ![photo_2024-08-10_23-44-50](https://github.com/user-attachments/assets/a9e37a3f-76d0-4363-b43c-8cbc0e3d5000)

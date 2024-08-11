@@ -9,6 +9,8 @@ By compiling for our host triple, the Rust compiler and the linker assume that t
 > [!WARNING]
 > This branch is currently closed and undergoing restructuring to more closely follow the assignment's purpose. You can still boot it _[look how to build]_.
 
+![68747470733a2f2f692e696d6775722e636f6d2f38356a677446622e676966](https://github.com/user-attachments/assets/50aff54e-1746-4b40-ad5e-f8738af1393e)
+
 # How to build
 
 <details>

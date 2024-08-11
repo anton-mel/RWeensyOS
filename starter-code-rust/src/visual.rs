@@ -1,129 +1,166 @@
-#![allow(dead_code)]
+// DRAFT v.1
 
-use alloc::format;
-use crate::println;
-use x86_64::VirtAddr;
-use alloc::string::String;
 use x86_64::structures::paging::OffsetPageTable;
-use core::fmt::Write;  // For write! macro
+use crate::{writeln_at, clear_screen, write_at};
+use crate::vga_buffer::{BUFFER_WIDTH, Color};
+use alloc::format;
 
-const MEMSIZE_PHYSICAL: usize = 1024 * 1024 * 128;  // Example size: 128 MiB
-const PAGESIZE: usize = 4096;                       // Default page size 4 KiB
-const NPROC: usize = 16;                            // Example number of processes
-const MEMSIZE_VIRTUAL: usize = 1024 * 1024 * 128;   // Example virtual memory size
-const HZ: usize = 100;                              // Frequency for animation
+const OFFSET: usize = 3;
+const ADDRESS_WIDTH: usize = 10;
+const PAGE_BLOCK_SIZE: usize = 64;
+const PAGESIZE: usize = 4096; // Extract from the bootloader
+const MEMSIZE_PHYSICAL: usize = PAGESIZE * PAGE_BLOCK_SIZE * 8;
+const MEMSIZE_VIRTUAL: usize = PAGESIZE * PAGE_BLOCK_SIZE * 8;
+// Extract MEMSIZE_PHYSICAL from the bootloader
 
-static mut TICKS: usize = 0;
 
 #[repr(u16)]
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 enum MemStateColor {
-    Kernel = 'K' as u16 | 0x0D00,
-    Free = '.' as u16 | 0x0700,
-    Reserved = 'R' as u16 | 0x0700,
-    Shared = 'S' as u16 | 0x0F00,
+    // - The lower 8 bits represent the text character (ASCII value).
+    // - The upper 8 bits represent the color value.
+    Kernel = ('K' as u16) | ((Color::Red as u16) << 8),
+    Free = ('.' as u16) | ((Color::LightGray as u16) << 8),
+    Reserved = ('R' as u16) | ((Color::LightGray as u16) << 8),
+    Shared = ('S' as u16) | ((Color::White as u16) << 8),
 }
 
+
+// ---------------------------------------------------------------
+// Placeholders [REQUIRED FOR AN UPDATE]
+const PTE_U: usize = 0x0040;
+impl Color {
+    fn from_u8(value: u8) -> Color {
+        // Example implementation: map u8 values to specific Color variants
+        match value {
+            0x07 => Color::LightGray, // Example mapping
+            _ => Color::Black, // Default or unknown color
+        }
+    }
+}
 #[derive(Copy, Clone)]
+#[allow(dead_code)]
 struct PageInfo {
     owner: usize,
     refcount: usize,
 }
-
+#[allow(dead_code)]
+struct Vamapping {
+    pn: usize,
+    pa: usize,
+    perm: usize,
+}
 static PAGEINFO: [PageInfo; MEMSIZE_PHYSICAL / PAGESIZE] = [PageInfo { owner: 0, refcount: 0 }; MEMSIZE_PHYSICAL / PAGESIZE];
+// ---------------------------------------------------------------
 
-pub fn display_physical_memory() {
-    let mut buffer = String::new();
 
-    writeln!(buffer, "PHYSICAL MEMORY").unwrap();
+//  _________________________________________________________________
+// |              ________ PHYSICAL/VIRTUAL MEMORY ______________    |
+// |    0x040000 |                                    ∧          |   |
+// |    0x080000 |                                    |          |   |
+// |    0x0C0000 |                                    8          |   |
+// |    0x100000 |<--------------------64-------------|--------->|   |
+// |    0x140000 |                                    |          |   |
+// |    0x180000 |                                    |          |   |
+// |    0x1C0000 |____________________________________∨__________|   |
+// |<----------------------------------80--------------------------->|
+//  <3> <--10--> <------------------- ... ----------------------> <3>
 
-    for pn in 0..PAGEINFO.len() {
-        if pn % 64 == 0 {
-            writeln!(buffer, "0x{:06X} ", pn * PAGESIZE).unwrap();
+// memshow_physical
+//    Draw a picture of physical memory on the CGA console.
+pub fn memshow_physical() {
+    clear_screen!();
+
+    writeln_at!(32, 0, Color::White, "PHYSICAL MEMORY");
+
+    let mut x = 0; // VGA buffer X
+    let mut y = 0; // VGA buffer Y
+
+    for (pn, page) in PAGEINFO.iter().enumerate() {
+        // Memory address
+        if pn % PAGE_BLOCK_SIZE == 0 {
+            y += 1; // new line
+            x = OFFSET;
+            let address = format!("0x{:06X}", pn * PAGESIZE);
+            writeln_at!(x, y, Color::White, &address);
+            x += ADDRESS_WIDTH;
         }
 
-        let owner = if PAGEINFO[pn].refcount == 0 { MemStateColor::Free } else { MemStateColor::Kernel };
-        let _color = owner as u16;
-        // Here you would use VGA buffer or similar to display with color
-        // For now, just append to the buffer
-        write!(buffer, "{}", owner as u8 as char).unwrap();
-    }
-
-    // Print the entire buffer at once
-    println!("{}", buffer);
-}
-
-pub fn display_virtual_memory(pagetable: &OffsetPageTable<'_>, name: &str) {
-    let mut buffer = String::new();
-
-    writeln!(buffer, "VIRTUAL ADDRESS SPACE FOR {}", name).unwrap();
-
-    for va in (0..MEMSIZE_PHYSICAL).step_by(PAGESIZE) {
-        let addr = VirtAddr::new(va as u64);
-        let vam = virtual_memory_lookup(pagetable, addr);
-        
-        let _color = if vam.is_none() {
-            ' ' as u16
-        } else {
-            let owner = if vam.unwrap().refcount == 0 { MemStateColor::Free } else { MemStateColor::Kernel };
-            let color = owner as u16;
-            color
+        // TODO: Define based on PAGEINFO
+        let color = match page.owner {
+            0 => Color::LightGray, // Free page
+            _ => Color::Red,       // Kernel page
         };
 
-        let pn = va / PAGESIZE;
-        if pn % 64 == 0 {
-            writeln!(buffer, "0x{:06X} ", va).unwrap();
-        }
-        // Here you would use VGA buffer or similar to display with color
-        // For now, just append to the buffer
-        write!(buffer, "{}", 'X').unwrap();  // Example placeholder
-    }
-
-    // Print the entire buffer at once
-    println!("{}", buffer);
-}
-
-fn virtual_memory_lookup(_pagetable: &OffsetPageTable<'_>, _addr: VirtAddr) -> Option<PageInfo> {
-    // Simulate the lookup process, returning some PageInfo for the given address
-    Some(PageInfo { owner: 0, refcount: 1 }) // Example return
-}
-
-fn display_virtual_memory_animate(processes: &[Process]) {
-    static mut LAST_TICKS: usize = 0;
-    static mut SHOWING: usize = 1;
-    const HZ: usize = 100;
-
-    unsafe {
-        if LAST_TICKS == 0 || TICKS - LAST_TICKS >= HZ / 4 {
-            LAST_TICKS = TICKS;
-            SHOWING += 1;
-        }
-
-        while SHOWING <= 2 * NPROC && processes[SHOWING % NPROC].state == ProcessState::Free {
-            SHOWING += 1;
-        }
-        SHOWING = SHOWING % NPROC;
-
-        if processes[SHOWING].state != ProcessState::Free && processes[SHOWING].display_status {
-            let name = format!("{}", SHOWING);
-            // Pass the reference to PageTable instead of OffsetPageTable
-            display_virtual_memory(&processes[SHOWING].pagetable, &name);
+        // Page status
+        if x < BUFFER_WIDTH {
+            write_at!(x, y, '.', color);
+            x += 1;
         }
     }
 }
 
-fn get_ticks() -> usize {
-    unsafe { TICKS }
+// memshow_virtual(pagetable, name)
+//    Draw a picture of the virtual memory map `pagetable` (named `name`) on
+//    the CGA console.
+pub fn memshow_virtual(_pagetable: &OffsetPageTable<'_>, name: &str) {
+    const PADDING_TOP: usize = 10; // avoid overlap
+
+    let header = format!("VIRTUAL ADDRESS SPACE FOR {}", name);
+    writeln_at!(26, PADDING_TOP, Color::White, &header);
+
+    let mut x = 0; // VGA buffer X
+    let mut y = PADDING_TOP; // VGA buffer Y (start below the header)
+
+    for va in (0..MEMSIZE_VIRTUAL).step_by(PAGESIZE) {
+        // Print address only for every 64 pages
+        if (va / PAGESIZE) % 64 == 0 {
+            y += 1; // new line
+            x = OFFSET;
+            let address = format!("0x{:06X}", va);
+            writeln_at!(x, y, Color::White, &address);
+            x += ADDRESS_WIDTH;
+        }
+
+        let vam = Vamapping {
+            pn: (va / PAGESIZE) % PAGE_BLOCK_SIZE, // Use a simple pattern for page number
+            pa: va, // Physical address (just for illustration)
+            perm: if va % 2 == 0 { PTE_U } else { 0 }, // Toggle user access permission
+        };
+        let page = &PAGEINFO[vam.pn];
+
+        let color = get_page_color(page.owner, page.refcount, vam.perm & PTE_U != 0);
+
+        // Page status
+        if x < BUFFER_WIDTH {
+            write_at!(x, y, '.', color);
+            x += 1;
+        }
+    }
 }
 
-struct Process<'a> {
-    state: ProcessState,
-    display_status: bool,
-    pagetable: OffsetPageTable<'a>,
+// Map page owner numbers to colors
+fn get_page_color(owner: usize, refcount: usize, is_user: bool) -> Color {
+    let base_color = match owner {
+        0 => Color::LightGray, // Free page
+        _ => Color::Red,       // Kernel page
+    };
+
+    let color = if is_user {
+        // Invert colors
+        let inverted_color = (base_color as u8) ^ 0x07;
+        Color::from_u8(inverted_color)
+    } else {
+        base_color
+    };
+
+    if refcount > 1 {
+        // Darker color for shared pages
+        let darker_color = (color as u8) & 0x77;
+        Color::from_u8(darker_color)
+    } else {
+        color
+    }
 }
 
-#[derive(PartialEq)]
-enum ProcessState {
-    Free,
-    // other states
-}

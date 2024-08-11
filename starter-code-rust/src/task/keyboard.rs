@@ -1,4 +1,4 @@
-use crate::{print, println};
+use crate::println;
 use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
@@ -77,15 +77,18 @@ pub async fn keypresses() {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    DecodedKey::RawKey(_key) => {},
                     DecodedKey::Unicode(c) => {
+                        // print!("{}", c);
                         if c == 'a' || c == 'c' || c == 'm' || c == 't' {
-                            // Load the test
+                            // Load the test (in the development)
                         } else if c == 'q' {
+                            // Unfortunately, shutting down is relatively complex because it requires 
+                            // implementing support for either the APM or ACPI power management standard.
+                            // Luckily, QEMU supports a special isa-debug-exit device, which provides 
+                            // an easy way to exit QEMU from the guest system (no need for assembly).
+                            // https://wiki.osdev.org/APM https://wiki.osdev.org/ACPI
                             exit_qemu(QemuExitCode::Success);
-                        } else {
-                            // Make sure the keyboard works
-                            print!("{}", c);
                         }
                     }
                 }

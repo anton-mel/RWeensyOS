@@ -90,7 +90,6 @@ extern "x86-interrupt" fn double_fault_handler(
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
-
 //                      ____________                          ____________
 // Real Time Clock --> |            |   Timer -------------> |            |
 // ACPI -------------> |            |   Keyboard-----------> |            |      _____
@@ -128,18 +127,18 @@ impl InterruptIndex {
     }
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
+extern "x86-interrupt" fn timer_interrupt_handler(
+    _stack_frame: InterruptStackFrame) {
     // print!(".");
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
 }
 
-
 extern "x86-interrupt" fn keyboard_interrupt_handler(
     _stack_frame: InterruptStackFrame)
 {
-    
+    // println!("{:#?}", stack_frame);
     use x86_64::instructions::port::Port;
 
     let mut port = Port::new(0x60);

@@ -56,8 +56,9 @@ struct ScreenChar {
     color_code: ColorCode,
 }
 
-const BUFFER_HEIGHT: usize = 25;
-const BUFFER_WIDTH: usize = 80;
+const DEFAULT_BG: Color = Color::Black;
+pub const BUFFER_HEIGHT: usize = 25;
+pub const BUFFER_WIDTH: usize = 80;
 
 struct Buffer {
     // Have to use the write method now, no normal `=` assignment
@@ -78,12 +79,13 @@ lazy_static! {
     // Global default WRITER for println!
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_code: ColorCode::new(Color::Yellow, DEFAULT_BG),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
 
 impl Writer {
+    /// Write
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
@@ -114,7 +116,6 @@ impl Writer {
                 // not part of printable ASCII range
                 _ => self.write_byte(0xfe),
             }
-
         }
     }
 
@@ -125,11 +126,41 @@ impl Writer {
                 self.buffer.chars[row - 1][col].write(character);
             }
         }
-        
+
         self.clear_row(BUFFER_HEIGHT - 1);
         self.column_position = 0;
     }
 
+    /// Visualize
+    pub fn write_at(&mut self, x: usize, y: usize, c: char, color: Color) {
+        if x >= BUFFER_WIDTH { self.new_line(); }
+        if y >= BUFFER_HEIGHT { return; }
+
+        let color_code = ColorCode::new(color, DEFAULT_BG);
+
+        self.buffer.chars[y][x].write(ScreenChar {
+            ascii_character: c as u8,
+            color_code,
+        });
+    }
+
+    pub fn writeln_at(&mut self, x: usize, y: usize, color: Color, text: &str) {
+        let color_code = ColorCode::new(color, DEFAULT_BG);
+
+        for (i, c) in text.chars().enumerate() {
+            // Do not display data overflow
+            if x + i >= BUFFER_WIDTH || y >= BUFFER_HEIGHT {
+                break;
+            }
+
+            self.buffer.chars[y][x + i].write(ScreenChar {
+                ascii_character: c as u8,
+                color_code,
+            });
+        }
+    }
+
+    /// Clean
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',
@@ -139,6 +170,13 @@ impl Writer {
         for col in 0..BUFFER_WIDTH {
             self.buffer.chars[row][col].write(blank);
         }
+    }
+
+    pub fn clear_screen(&mut self) {
+        for row in 0..BUFFER_HEIGHT {
+            self.clear_row(row);
+        }
+        self.column_position = 0;
     }
 }
 
@@ -170,6 +208,33 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+/// Here clear_screen macro clear the entire screen by invoking `clear_screen` 
+/// on the global WRITER. This will set all characters in the buffer to the 
+/// blank space character and reset the column position, while write_at macro 
+/// write a specific character at a given position (x, y). If the coordinates 
+/// are out of bounds, no action is performed.
+
+#[macro_export]
+macro_rules! clear_screen {
+    () => {
+        $crate::vga_buffer::WRITER.lock().clear_screen();
+    };
+}
+
+#[macro_export]
+macro_rules! write_at {
+    ($x:expr, $y:expr, $c:expr, $color:expr) => {
+        $crate::vga_buffer::WRITER.lock().write_at($x, $y, $c, $color);
+    };
+}
+
+#[macro_export]
+macro_rules! writeln_at {
+    ($x:expr, $y:expr, $color:expr, $text:expr) => {
+        crate::vga_buffer::WRITER.lock().writeln_at($x, $y, $color, $text);
+    };
 }
 
 // One thing that we changed from the original println definition is that we 

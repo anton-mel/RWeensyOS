@@ -17,7 +17,6 @@
 
 extern crate alloc;
 
-use weensyos::println;
 use weensyos::task::{executor::Executor, keyboard, Task};
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
@@ -32,11 +31,9 @@ entry_point!(kernel_main);
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use weensyos::allocator;
     use weensyos::memory::{self, BootInfoFrameAllocator};
-    // use weensyos::visual::{display_physical_memory, display_virtual_memory};
+    use weensyos::visual::{memshow_physical, memshow_virtual};
     use x86_64::VirtAddr;
-    
-    println!("press `{}` to exit or try typing below\n", "q");
-    println!("press `{}`, `{}`, `{}`, or `{}` to load program (in dev)\n", "a", "c", "m", "t");
+
     weensyos::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
@@ -45,52 +42,35 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    /* display_physical_memory();
+    memshow_physical();
     // Initialize a temporary page table to visualize memory
     let page_table = unsafe { memory::init(phys_mem_offset) };
-    display_virtual_memory(&page_table, "Kernel"); */
+    memshow_virtual(&page_table, "1");
 
     // DevTests
     #[cfg(test)]
     test_main();
 
     let mut executor = Executor::new();
-    executor.spawn(Task::new(example_task()));
     executor.spawn(Task::new(keyboard::keypresses()));
     executor.run();
 }
+
 
 
 // Handle New Panic
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    use weensyos::println;
     // Panic in Run Mode prints
     println!("{}", info);
     weensyos::fail();
 }
+
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     // Panic in Test Mode quits
     weensyos::test_panic_handler(info)
-}
-
-
-///////////////////////////////////////////
-///
-/// Some simple execution task
-
-async fn async_number() -> u32 {
-    5
-}
-
-async fn example_task() {
-    let number = async_number().await;
-    println!("async number: {} [ok]", number);
-}
-
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
 }

@@ -7,4 +7,4 @@ WeensyOS is a tiny kernel that can run on bare-metal x86-64 machines (QEMU's emu
 
 ## Preview
 
-![photo_2024-08-10_23-44-50](https://github.com/user-attachments/assets/a9e37a3f-76d0-4363-b43c-8cbc0e3d5000)
+![WeensyOS](https://github.com/user-attachments/assets/989775fa-0de3-440d-9d0b-af61ed201c6a)

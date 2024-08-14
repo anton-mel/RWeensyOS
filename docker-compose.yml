@@ -1,0 +1,9 @@
+services:
+  weensyos:
+    image: antonmel/weensyos:latest
+    platform: linux/amd64
+    volumes:
+      - .:/starter-code-rust/ # map the volume to the source code
+    stdin_open: true          # Keeps STRDIN open for iteractive use
+    tty: true                 # Allocates a pseudo-TTY
+    entrypoint: /bin/bash     # -it option
